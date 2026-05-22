@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
-from typing import Any
+from typing import Any, Dict
 
 import rclpy
 from rclpy.node import Node
 
 from r1_msgs.msg import R1GloveState
+
+from r1_shadow_teleop.shadow_mapping import map_r1_flexion_to_shadow_targets
 
 
 class R1GloveListener(Node):
@@ -49,36 +51,28 @@ class R1GloveListener(Node):
         self.message_count += 1
 
     def ros_value_to_python(self, value: Any):
-        """
-        Convert common ROS message fields into printable Python values.
-        Handles scalars, lists, tuples, arrays, and nested ROS messages.
-        """
         if value is None:
             return None
 
         if isinstance(value, (str, int, float, bool)):
             return value
 
-        if isinstance(value, (list, tuple)):
-            converted = [self.ros_value_to_python(v) for v in value]
-            if len(converted) > 10:
-                return converted[:10] + ["..."]
-            return converted
-
-        # std_msgs/*MultiArray types usually have a .data field.
+        # MultiArray messages have .data
         if hasattr(value, "data"):
-            data = list(value.data)
-            if len(data) > 10:
-                return data[:10] + ["..."]
-            return data
+            return list(value.data)
 
-        # Nested ROS messages expose get_fields_and_field_types().
+        # ROS2 float64[] fields often appear as array.array, not list
+        if hasattr(value, "__iter__") and not isinstance(value, (str, bytes, dict)):
+            try:
+                return [self.ros_value_to_python(v) for v in value]
+            except TypeError:
+                pass
+
+        # Nested ROS messages
         if hasattr(value, "get_fields_and_field_types"):
             out = {}
             for field_name in value.get_fields_and_field_types().keys():
-                out[field_name] = self.ros_value_to_python(
-                    getattr(value, field_name)
-                )
+                out[field_name] = self.ros_value_to_python(getattr(value, field_name))
             return out
 
         return str(value)
@@ -88,6 +82,34 @@ class R1GloveListener(Node):
             return self.ros_value_to_python(getattr(msg, field_name))
         return None
 
+    def infer_flexion_by_finger(self, msg: R1GloveState) -> Dict[str, float]:
+        """
+        R1 normalized_finger_positions order from the message definition:
+
+        [flexion_thumb, flexion_index, flexion_middle, flexion_ring, flexion_pinky,
+         abduction_thumb, abduction_index, abduction_middle, abduction_ring, abduction_pinky]
+
+        Range is 0..10000, so we divide by 10000 for 0.0..1.0.
+        """
+        values = self.get_field(msg, "normalized_finger_positions")
+
+        if not isinstance(values, list) or len(values) < 5:
+            return {
+                "thumb": 0.0,
+                "index": 0.0,
+                "middle": 0.0,
+                "ring": 0.0,
+                "pinky": 0.0,
+            }
+
+        return {
+            "thumb": float(values[0]) / 10000.0,
+            "index": float(values[1]) / 10000.0,
+            "middle": float(values[2]) / 10000.0,
+            "ring": float(values[3]) / 10000.0,
+            "pinky": float(values[4]) / 10000.0,
+        }
+
     def print_summary(self):
         if self.latest_msg is None:
             self.get_logger().info(
@@ -96,21 +118,27 @@ class R1GloveListener(Node):
             return
 
         msg = self.latest_msg
-        fields = list(msg.get_fields_and_field_types().keys())
+        raw_positions = self.get_field(msg, "normalized_finger_positions")
+        flexion_by_finger = self.infer_flexion_by_finger(msg)
+        target = map_r1_flexion_to_shadow_targets(flexion_by_finger)
 
-        self.get_logger().info(
-            "\n"
-            f"R1 glove summary\n"
-            f"  topic: {self.glove_topic}\n"
-            f"  messages_received: {self.message_count}\n"
-            f"  fields: {fields}\n"
-            f"  finger_names: {self.get_field(msg, 'finger_names')}\n"
-            f"  joint_angles: {self.get_field(msg, 'joint_angles')}\n"
-            f"  finger_distances: {self.get_field(msg, 'finger_distances')}\n"
-            f"  normalized_finger_positions: {self.get_field(msg, 'normalized_finger_positions')}\n"
-            f"  normalized_finger_positions_pinch: {self.get_field(msg, 'normalized_finger_positions_pinch')}\n"
-            f"  sensed_forces: {self.get_field(msg, 'sensed_forces')}\n"
-        )
+        lines = [
+            "",
+            "R1 → Shadow dry-run mapping",
+            f"  topic: {self.glove_topic}",
+            f"  messages_received: {self.message_count}",
+            f"  raw normalized_finger_positions: {raw_positions}",
+            "  R1 flexion estimate, scaled 0.0..1.0:",
+        ]
+
+        for finger, value in flexion_by_finger.items():
+            lines.append(f"    {finger:>6}: {value: .3f}")
+
+        lines.append("  Proposed Shadow joint targets, NOT publishing:")
+        for name, pos in zip(target.joint_names, target.positions):
+            lines.append(f"    {name}: {pos: .3f}")
+
+        self.get_logger().info("\n".join(lines))
 
 
 def main(args=None):

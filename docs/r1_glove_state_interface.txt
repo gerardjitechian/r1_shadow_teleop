@@ -1,0 +1,53 @@
+# R1GloveState.msg
+# A message for streaming R1 Hand State
+
+std_msgs/Header header
+	builtin_interfaces/Time stamp
+		int32 sec
+		uint32 nanosec
+	string frame_id
+string[] finger_names
+
+# Exoskeleton joint angles [rad]
+std_msgs/Float64MultiArray joint_angles
+	MultiArrayLayout  layout        #
+		#
+		#
+		#
+		#
+		#
+		MultiArrayDimension[] dim #
+			string label   #
+			uint32 size    #
+			uint32 stride  #
+		uint32 data_offset        #
+	float64[]         data          #
+
+# Fingertip Cartesian positions in the glove's local frame [mm]
+geometry_msgs/Point[] finger_tip_positions
+	float64 x
+	float64 y
+	float64 z
+
+# Fingertip orientations as unit quaternions (x, y, z, w)
+geometry_msgs/Quaternion[] finger_tip_orientations
+	float64 x 0
+	float64 y 0
+	float64 z 0
+	float64 w 1
+
+# Euclidean distances from the thumb tip to each other fingertip [index, middle, ring, pinky] [mm]
+float64[] finger_distances
+
+# Flexion/abduction Percentage Bents
+# [flexion_thumb, flexion_index, flexion_middle, flexion_ring, flexion_pinky,
+# abduction_thumb, abduction_index, abduction_middle, abduction_ring, abduction_pinky] Range: [0-10000]
+float64[] normalized_finger_positions
+
+# Flexion/abduction percentages remapped through the RobotHandMapper (RHM) pinch config
+# [flexion_thumb, flexion_index, flexion_middle, flexion_ring, flexion_pinky,
+# abduction_thumb, abduction_index, abduction_middle, abduction_ring, abduction_pinky] Range: [0-10000]
+float64[] normalized_finger_positions_pinch
+
+# Currently sensed forces for each finger [thumb, index, middle, ring] [mN]
+float64[] sensed_forces
