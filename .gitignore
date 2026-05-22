@@ -28,3 +28,6 @@ bags/
 .DS_Store
 .vscode/
 .idea/
+
+# Generated dry-run Shadow command snapshot
+docs/latest_shadow_command_packet.json
