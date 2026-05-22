@@ -10,6 +10,7 @@ from r1_msgs.msg import R1GloveState
 from r1_shadow_teleop.r1_calibration import calibrate_flexion
 from r1_shadow_teleop.shadow_mapping import map_r1_flexion_to_shadow_targets
 from r1_shadow_teleop.shadow_trajectory import build_shadow_joint_trajectory, format_joint_trajectory
+from r1_shadow_teleop.shadow_command_packet import trajectory_to_packet, format_packet, save_packet
 
 
 class R1GloveListener(Node):
@@ -72,6 +73,12 @@ class R1GloveListener(Node):
 
         target = map_r1_flexion_to_shadow_targets(calibrated_flexion)
         trajectory_msg = build_shadow_joint_trajectory(target, duration_sec=2.0)
+        packet = trajectory_to_packet(trajectory_msg)
+
+        save_packet(
+            packet,
+            "/home/gerard/r1_ws/src/r1_shadow_teleop/docs/latest_shadow_command_packet.json",
+        )
 
         lines = [
             "",
@@ -105,6 +112,9 @@ class R1GloveListener(Node):
 
         lines.append("")
         lines.append(format_joint_trajectory(trajectory_msg))
+        lines.append("")
+        lines.append("Saved latest dry-run command packet to:")
+        lines.append("  docs/latest_shadow_command_packet.json")
 
         self.get_logger().info("\n".join(lines))
 
