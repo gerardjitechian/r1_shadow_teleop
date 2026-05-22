@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ROS / colcon generated output
+build/
+install/
+log/
+
+# Virtual environments
+.venv/
+venv/
+
+# Data / logs / recordings
+bags/
+*.db3
+*.mcap
+*.bag
+*.csv
+*.jsonl
+*.log
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
