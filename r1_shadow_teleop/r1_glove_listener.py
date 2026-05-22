@@ -9,6 +9,7 @@ from r1_msgs.msg import R1GloveState
 
 from r1_shadow_teleop.r1_calibration import calibrate_flexion
 from r1_shadow_teleop.shadow_mapping import map_r1_flexion_to_shadow_targets
+from r1_shadow_teleop.shadow_trajectory import build_shadow_joint_trajectory, format_joint_trajectory
 
 
 class R1GloveListener(Node):
@@ -70,6 +71,7 @@ class R1GloveListener(Node):
         calibrated_flexion = calibrate_flexion(raw_flexion)
 
         target = map_r1_flexion_to_shadow_targets(calibrated_flexion)
+        trajectory_msg = build_shadow_joint_trajectory(target, duration_sec=2.0)
 
         lines = [
             "",
@@ -87,10 +89,22 @@ class R1GloveListener(Node):
         for finger, value in calibrated_flexion.items():
             lines.append(f"    {finger:>6}: {value: .3f}")
 
+        ff_flex = calibrated_flexion.get("index", 0.0)
+        rf_flex = calibrated_flexion.get("ring", 0.0)
+        th_flex = calibrated_flexion.get("thumb", 0.0)
+
+        lines.append("  Human-readable Shadow preview:")
+        lines.append(f"    Shadow first finger from R1 index: {ff_flex: .3f}")
+        lines.append(f"    Shadow ring finger  from R1 ring:  {rf_flex: .3f}")
+        lines.append(f"    Shadow thumb        from R1 thumb: {th_flex: .3f}")
+
         lines.append("  Proposed Shadow joint targets, NOT publishing:")
 
         for name, pos in zip(target.joint_names, target.positions):
             lines.append(f"    {name}: {pos: .3f}")
+
+        lines.append("")
+        lines.append(format_joint_trajectory(trajectory_msg))
 
         self.get_logger().info("\n".join(lines))
 
