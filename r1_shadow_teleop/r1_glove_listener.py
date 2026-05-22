@@ -7,6 +7,7 @@ from rclpy.node import Node
 
 from r1_msgs.msg import R1GloveState
 
+from r1_shadow_teleop.r1_calibration import calibrate_flexion
 from r1_shadow_teleop.shadow_mapping import map_r1_flexion_to_shadow_targets
 
 
@@ -17,32 +18,20 @@ class R1GloveListener(Node):
         self.declare_parameter("glove_topic", "/r1/glove69/rh/glove_states")
         self.declare_parameter("print_period_sec", 1.0)
 
-        self.glove_topic = (
-            self.get_parameter("glove_topic")
-            .get_parameter_value()
-            .string_value
-        )
-
-        self.print_period_sec = (
-            self.get_parameter("print_period_sec")
-            .get_parameter_value()
-            .double_value
-        )
+        self.glove_topic = self.get_parameter("glove_topic").value
+        self.print_period_sec = self.get_parameter("print_period_sec").value
 
         self.latest_msg = None
         self.message_count = 0
 
-        self.subscription = self.create_subscription(
+        self.create_subscription(
             R1GloveState,
             self.glove_topic,
             self.on_glove_state,
             10,
         )
 
-        self.timer = self.create_timer(
-            self.print_period_sec,
-            self.print_summary,
-        )
+        self.create_timer(self.print_period_sec, self.print_summary)
 
         self.get_logger().info(f"Listening to R1 glove topic: {self.glove_topic}")
 
@@ -50,50 +39,10 @@ class R1GloveListener(Node):
         self.latest_msg = msg
         self.message_count += 1
 
-    def ros_value_to_python(self, value: Any):
-        if value is None:
-            return None
+    def get_raw_flexion_by_finger(self, msg: R1GloveState) -> Dict[str, float]:
+        values = list(msg.normalized_finger_positions)
 
-        if isinstance(value, (str, int, float, bool)):
-            return value
-
-        # MultiArray messages have .data
-        if hasattr(value, "data"):
-            return list(value.data)
-
-        # ROS2 float64[] fields often appear as array.array, not list
-        if hasattr(value, "__iter__") and not isinstance(value, (str, bytes, dict)):
-            try:
-                return [self.ros_value_to_python(v) for v in value]
-            except TypeError:
-                pass
-
-        # Nested ROS messages
-        if hasattr(value, "get_fields_and_field_types"):
-            out = {}
-            for field_name in value.get_fields_and_field_types().keys():
-                out[field_name] = self.ros_value_to_python(getattr(value, field_name))
-            return out
-
-        return str(value)
-
-    def get_field(self, msg: R1GloveState, field_name: str):
-        if hasattr(msg, field_name):
-            return self.ros_value_to_python(getattr(msg, field_name))
-        return None
-
-    def infer_flexion_by_finger(self, msg: R1GloveState) -> Dict[str, float]:
-        """
-        R1 normalized_finger_positions order from the message definition:
-
-        [flexion_thumb, flexion_index, flexion_middle, flexion_ring, flexion_pinky,
-         abduction_thumb, abduction_index, abduction_middle, abduction_ring, abduction_pinky]
-
-        Range is 0..10000, so we divide by 10000 for 0.0..1.0.
-        """
-        values = self.get_field(msg, "normalized_finger_positions")
-
-        if not isinstance(values, list) or len(values) < 5:
+        if len(values) < 5:
             return {
                 "thumb": 0.0,
                 "index": 0.0,
@@ -117,24 +66,29 @@ class R1GloveListener(Node):
             )
             return
 
-        msg = self.latest_msg
-        raw_positions = self.get_field(msg, "normalized_finger_positions")
-        flexion_by_finger = self.infer_flexion_by_finger(msg)
-        target = map_r1_flexion_to_shadow_targets(flexion_by_finger)
+        raw_flexion = self.get_raw_flexion_by_finger(self.latest_msg)
+        calibrated_flexion = calibrate_flexion(raw_flexion)
+
+        target = map_r1_flexion_to_shadow_targets(calibrated_flexion)
 
         lines = [
             "",
-            "R1 → Shadow dry-run mapping",
+            "R1 → Shadow calibrated dry-run mapping",
             f"  topic: {self.glove_topic}",
             f"  messages_received: {self.message_count}",
-            f"  raw normalized_finger_positions: {raw_positions}",
-            "  R1 flexion estimate, scaled 0.0..1.0:",
+            "  Raw R1 flexion, scaled 0.0..1.0:",
         ]
 
-        for finger, value in flexion_by_finger.items():
+        for finger, value in raw_flexion.items():
+            lines.append(f"    {finger:>6}: {value: .3f}")
+
+        lines.append("  Calibrated R1 flexion, open≈0.0 closed≈1.0:")
+
+        for finger, value in calibrated_flexion.items():
             lines.append(f"    {finger:>6}: {value: .3f}")
 
         lines.append("  Proposed Shadow joint targets, NOT publishing:")
+
         for name, pos in zip(target.joint_names, target.positions):
             lines.append(f"    {name}: {pos: .3f}")
 
