@@ -324,7 +324,7 @@ Do not commit this generated packet.
 ### Important calibration/data files
 
 ```text
-docs/r1_right_glove_pose_calibration.csv
+docs/calibrations/r1_right_glove_calibration_latest.csv
 docs/r1_glove_state_interface.txt
 docs/r1_glove69_raw_echo_5sec.txt
 ```

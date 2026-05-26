@@ -337,7 +337,7 @@ r1_shadow_teleop/
 │   ├── r1_glove_listener.py
 │   ├── r1_calibration.py
 │   ├── r1_calibration_printer.py
-│   ├── r1_pose_recorder.py
+│   ├── r1_calibration_tool.py
 │   ├── shadow_mapping.py
 │   ├── shadow_trajectory.py
 │   └── shadow_command_packet.py
@@ -348,7 +348,7 @@ r1_shadow_teleop/
 └── docs/
     ├── calibration_plan.md
     ├── r1_mapping_notes.md
-    ├── r1_right_glove_pose_calibration.csv
+    ├── calibrations/
     ├── shadow_ros1_sender_safety.md
     └── shadow_hand_discovery/
 ```
@@ -458,19 +458,86 @@ source ~/r1_ws/activate_r1.sh
 ros2 run r1_shadow_teleop r1_calibration_printer
 ```
 
-### Run pose recorder
+### Run calibration utility
+
+Interactive guided calibration:
 
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_pose_recorder
+ros2 run r1_shadow_teleop r1_calibration
 ```
 
-This writes:
+The utility prompts for hand, mode, selected fingers, and output location. For each pose it shows a separated step panel with explicit, comfort-focused instructions, waits for Enter, shows settle/sample progress based on `settle_seconds` and `sample_seconds`, shows a compact summary, then asks:
 
 ```text
-~/r1_ws/src/r1_shadow_teleop/docs/r1_right_glove_pose_calibration.csv
+Enter/a = accept and continue
+r       = repeat this pose
+s       = skip optional pose
+q       = abort safely
 ```
+
+Each complete run writes timestamped CSV/JSON files under the package-local calibration directory and updates stable latest files there:
+
+```text
+r1_shadow_teleop/calibrations/r1_right_glove_calibration_2026-05-26_143012.csv
+r1_shadow_teleop/calibrations/r1_right_glove_calibration_latest.csv
+```
+
+Existing calibration files under `docs/calibrations/` are still read as a legacy fallback when no runtime records exist, but new calibration runs now write to `r1_shadow_teleop/calibrations/` by default. Each saved run also updates the package-local registry:
+
+```text
+r1_shadow_teleop/calibrations/calibration_registry.json
+```
+
+Longer timing example:
+
+```bash
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p settle_seconds:=1.5 -p sample_seconds:=4.0
+```
+
+Useful non-interactive setup examples:
+
+```bash
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=abduction -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=flexion -p fingers:=index -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=both -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=pinch_validation -p fingers:=index,middle,ring,pinky -p hand:=right -p non_interactive:=true
+```
+
+Run the listener with the default active calibration. The default resolver is `composed_latest`, which chooses the newest valid record per hand, dimension, and finger so a flexion-only run does not erase previous abduction calibration:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener
+```
+
+Resolver modes:
+
+```text
+composed_latest  newest valid record per dimension/finger, default
+latest_complete  newest single run with complete flexion and abduction
+explicit_file    only the file passed with calibration_csv_path
+```
+
+Example:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_resolver_mode:=latest_complete
+```
+
+Run the listener with an explicit calibration file. Explicit paths still override the registry resolver and use only that CSV plus its sidecar:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_csv_path:=r1_shadow_teleop/calibrations/r1_right_glove_calibration_YYYY-MM-DD_HHMMSS.csv
+```
+
+Run the listener in plain/no-color mode:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p use_rich:=false -p color_output:=false
+```
+
+Abduction note: raw/sdk abduction is directional SDK data. The listener also shows the calibration neutral baseline, signed offset from neutral, spread, and an abduction status. Spread is shown only when schema v2 calibration metadata is reliable; missing quality metadata or warnings mean recalibration is recommended.
 
 ### Create Shadow print-only transfer bundle
 
@@ -589,11 +656,7 @@ These are generated runtime artifacts and generally should not be committed:
 docs/latest_shadow_command_packet.json
 ```
 
-The calibration CSV is useful data and **should** be committed if updated intentionally:
-
-```text
-docs/r1_right_glove_pose_calibration.csv
-```
+Runtime calibration CSV/JSON files now live under `r1_shadow_teleop/calibrations/` and are generated files and should only be committed intentionally. Older calibration files under `~/.ros/r1_shadow_teleop/calibrations/` or `docs/calibrations/` remain fallback-readable.
 
 The Shadow print-only bundle should not be committed:
 

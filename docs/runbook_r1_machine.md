@@ -9,7 +9,7 @@
 - [Launch the Right R1 Glove](#launch-the-right-r1-glove)
 - [Run the Calibrated Dry-Run Listener](#run-the-calibrated-dry-run-listener)
 - [Run the Calibration Printer](#run-the-calibration-printer)
-- [Run the Pose Recorder](#run-the-pose-recorder)
+- [Run the Calibration Utility](#run-the-calibration-utility)
 - [Generate a Shadow Print-Only Bundle](#generate-a-shadow-print-only-bundle)
 - [Test the Shadow Packet Locally](#test-the-shadow-packet-locally)
 - [Git Workflow](#git-workflow)
@@ -150,17 +150,7 @@ source ~/r1_ws/activate_r1.sh
 ros2 run r1_shadow_teleop r1_glove_listener
 ```
 
-Expected output:
-
-```text
-R1 → Shadow calibrated dry-run mapping
-Raw R1 flexion, scaled 0.0..1.0
-Calibrated R1 flexion, open≈0.0 closed≈1.0
-Human-readable Shadow preview
-Shadow JointTrajectory preview, NOT publishing
-Saved latest dry-run command packet to:
-  docs/latest_shadow_command_packet.json
-```
+Expected output is a dry-run dashboard with calibration reporting and an R1 finger table. The calibration section should include the active resolver, source files or registry components, status, and any recalibration warnings. The table includes raw flexion, calibrated flexion, raw/sdk abduction, neutral baseline, signed abduction offset, reliable spread when available, and abduction status.
 
 This node writes:
 
@@ -194,69 +184,90 @@ This is mainly for quick debugging.
 
 ---
 
-## Run the Pose Recorder
+## Run the Calibration Utility
 
-Use this when recalibrating the glove.
+Use this when recalibrating the glove. The default command is interactive and guided.
 
 Terminal 2:
 
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_pose_recorder
+ros2 run r1_shadow_teleop r1_calibration
 ```
 
-It will prompt for poses one at a time.
-
-Pose descriptions:
+For each pose, the utility shows a separated step panel with explicit, comfort-focused instructions, waits for Enter, shows settle/sample progress based on `settle_seconds` and `sample_seconds`, then asks what to do next:
 
 ```text
-open_relaxed
-- Hand open and relaxed.
-- Fingers naturally extended.
-- Thumb relaxed/open.
-
-full_fist
-- Close all fingers into a fist.
-- Thumb can naturally rest where comfortable.
-
-thumb_only
-- Keep index/middle/ring/pinky open.
-- Bend only the thumb inward toward the palm.
-- Do not pinch.
-
-index_only
-- Keep thumb/middle/ring/pinky open.
-- Bend only the index finger.
-
-middle_only
-- Keep other fingers as open as possible.
-- Bend only the middle finger.
-
-ring_only
-- Keep other fingers as open as possible.
-- Bend only the ring finger.
-
-pinky_only
-- Keep other fingers as open as possible.
-- Bend only the pinky.
-
-index_thumb_pinch
-- Touch thumb tip to index fingertip.
-- Keep other fingers as open as possible.
-
-ring_thumb_pinch
-- Touch thumb tip to ring fingertip.
-- Approximate is fine.
+Enter/a = accept and continue
+r       = repeat this pose if the capture looked bad
+s       = skip optional pose
+q       = abort safely
 ```
 
-Output file:
+Complete calibrations write timestamped CSV/JSON files and update latest copies in the package-local calibration directory:
 
 ```text
-~/r1_ws/src/r1_shadow_teleop/docs/r1_right_glove_pose_calibration.csv
+r1_shadow_teleop/calibrations/r1_right_glove_calibration_<timestamp>.csv
+r1_shadow_teleop/calibrations/r1_right_glove_calibration_latest.csv
 ```
 
-If you intentionally update calibration data, commit the CSV.
+Existing files under `docs/calibrations/` remain readable as a legacy fallback when no runtime records exist, but new calibration runs now write to `r1_shadow_teleop/calibrations/` by default. Each saved run also updates the package-local registry:
+
+```text
+r1_shadow_teleop/calibrations/calibration_registry.json
+```
+
+Incomplete or aborted runs are saved with incomplete metadata when useful, but latest is not updated.
+
+Longer timing example:
+
+```bash
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p settle_seconds:=1.5 -p sample_seconds:=4.0
+```
+
+Non-interactive setup examples:
+
+```bash
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=abduction -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=flexion -p fingers:=index -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=both -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=pinch_validation -p fingers:=index,middle,ring,pinky -p hand:=right -p non_interactive:=true
+```
+
+Run the listener with the default active calibration. The default resolver is `composed_latest`, which chooses the newest valid record per hand, dimension, and finger so a flexion-only run does not erase previous abduction calibration:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener
+```
+
+Resolver modes:
+
+```text
+composed_latest  newest valid record per dimension/finger, default
+latest_complete  newest single run with complete flexion and abduction
+explicit_file    only the file passed with calibration_csv_path
+```
+
+Example:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_resolver_mode:=latest_complete
+```
+
+Run the listener with a specific calibration file. Explicit paths still override the registry resolver and use only that CSV plus its sidecar:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_csv_path:=r1_shadow_teleop/calibrations/r1_right_glove_calibration_YYYY-MM-DD_HHMMSS.csv
+```
+
+Run the listener in plain/no-color mode:
+
+```bash
+ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p use_rich:=false -p color_output:=false
+```
+
+Abduction note: raw/sdk abduction is directional SDK data. The listener also shows the calibration neutral baseline, signed offset from neutral, spread, and an abduction status. Spread is shown only when schema v2 calibration metadata is reliable; missing quality metadata or warnings mean recalibration is recommended.
 
 ---
 

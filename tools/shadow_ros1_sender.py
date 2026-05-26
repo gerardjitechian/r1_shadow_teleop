@@ -128,6 +128,7 @@ def packet_allows_robot_motion(packet: dict) -> bool:
 def publish_ros1(packet: dict) -> None:
     """
     Import ROS1 modules only when actually publishing.
+
     This lets the script run in print-only mode on the ROS2 R1 machine.
     """
     import rospy

@@ -12,7 +12,6 @@ def trajectory_to_packet(msg: JointTrajectory, source: str = "r1_glove69_rh") ->
     This is for dry-run bridge development only.
     It does NOT publish to the Shadow Hand.
     """
-
     if msg.points:
         point = msg.points[0]
         positions = [float(x) for x in point.positions]

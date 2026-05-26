@@ -20,7 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "r1_glove_listener = r1_shadow_teleop.r1_glove_listener:main",
-            "r1_pose_recorder = r1_shadow_teleop.r1_pose_recorder:main",
+            "r1_calibration = r1_shadow_teleop.r1_calibration_tool:main",
             "r1_calibration_printer = r1_shadow_teleop.r1_calibration_printer:main",
         ],
     },

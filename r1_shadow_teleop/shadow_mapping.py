@@ -51,7 +51,6 @@ def map_r1_flexion_to_shadow_targets(flexion_by_finger: Dict[str, float]) -> Sha
 
     R1 middle and pinky are ignored for now.
     """
-
     thumb = safe_flexion(flexion_by_finger.get("thumb", 0.0))
     index = safe_flexion(flexion_by_finger.get("index", 0.0))
     ring = safe_flexion(flexion_by_finger.get("ring", 0.0))

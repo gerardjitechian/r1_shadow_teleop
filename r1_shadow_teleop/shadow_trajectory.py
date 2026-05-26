@@ -9,12 +9,10 @@ def build_shadow_joint_trajectory(
     duration_sec: float = 2.0,
 ) -> JointTrajectory:
     """
-    Build the exact JointTrajectory message shape we expect to eventually send
-    to the Shadow Hand trajectory controller.
+    Build the expected Shadow JointTrajectory message shape.
 
     This function only builds the message. It does NOT publish it.
     """
-
     msg = JointTrajectory()
     msg.joint_names = list(target.joint_names)
 
