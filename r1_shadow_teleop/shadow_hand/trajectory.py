@@ -1,7 +1,7 @@
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from builtin_interfaces.msg import Duration
 
-from r1_shadow_teleop.shadow_mapping import ShadowTarget
+from r1_shadow_teleop.shadow_hand.mapping_preview import ShadowTarget
 
 
 def build_shadow_joint_trajectory(

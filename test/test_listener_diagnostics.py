@@ -1,19 +1,13 @@
-import importlib
 import json
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-calibration_module = importlib.import_module(
-    "r1_shadow_teleop.r1_calibration"
+from r1_shadow_teleop.calibration.diagnostics import abduction_diagnostics
+from r1_shadow_teleop.calibration.models import (
+    FINGERS,
+    AbductionSpreadRange,
+    LoadedCalibration,
 )
-
-AbductionSpreadRange = calibration_module.AbductionSpreadRange
-FINGERS = calibration_module.FINGERS
-LoadedCalibration = calibration_module.LoadedCalibration
-abduction_diagnostics = calibration_module.abduction_diagnostics
-load_calibration = calibration_module.load_calibration
-update_calibration_registry = calibration_module.update_calibration_registry
+from r1_shadow_teleop.calibration.resolver import load_calibration
+from r1_shadow_teleop.calibration.storage import update_calibration_registry
 
 
 def flexion_ranges(open_value=0.1, closed_value=0.9):

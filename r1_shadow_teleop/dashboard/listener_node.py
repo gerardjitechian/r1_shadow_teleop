@@ -7,16 +7,15 @@ from rclpy.node import Node
 
 from r1_msgs.msg import R1GloveState
 
-from r1_shadow_teleop.r1_calibration import (
-    DEFAULT_CALIBRATION_DIR,
-    abduction_diagnostics,
-    calibrate_flexion,
-    load_calibration,
+from r1_shadow_teleop.calibration.defaults import DEFAULT_CALIBRATION_DIR
+from r1_shadow_teleop.calibration.resolver import load_calibration
+from r1_shadow_teleop.pipeline.flow import build_dry_run_pipeline
+from r1_shadow_teleop.senseglove_r1.frame import FINGER_ORDER, parse_r1_glove_state
+from r1_shadow_teleop.shadow_hand.command_packet import (
+    DEFAULT_COMMAND_PACKET_PATH,
+    save_packet,
 )
-from r1_shadow_teleop.r1_hand_frame import FINGER_ORDER, parse_r1_glove_state
-from r1_shadow_teleop.shadow_mapping import map_r1_flexion_to_shadow_targets
-from r1_shadow_teleop.shadow_trajectory import build_shadow_joint_trajectory
-from r1_shadow_teleop.shadow_command_packet import trajectory_to_packet, save_packet
+from r1_shadow_teleop.shadow_hand.config import resolve_hand_teleop_config
 
 try:
     from rich.console import Console, Group
@@ -33,14 +32,12 @@ except ImportError:
     Text = None
 
 
-LATEST_PACKET_PATH = (
-    "/home/gerard/r1_ws/src/r1_shadow_teleop/docs/latest_shadow_command_packet.json"
-)
+LATEST_PACKET_PATH = DEFAULT_COMMAND_PACKET_PATH
 
 
 class R1GloveListener(Node):
     def __init__(self):
-        super().__init__("r1_glove_listener")
+        super().__init__("senseglove_r1_listener")
 
         self.declare_parameter("glove_topic", "/r1/glove69/rh/glove_states")
         self.declare_parameter("print_period_sec", 1.0)
@@ -51,6 +48,11 @@ class R1GloveListener(Node):
         self.declare_parameter("calibration_dir", str(DEFAULT_CALIBRATION_DIR))
         self.declare_parameter("calibration_csv_path", "")
         self.declare_parameter("calibration_resolver_mode", "composed_latest")
+        self.declare_parameter("input_source", "senseglove_r1")
+        self.declare_parameter("input_hand", "right")
+        self.declare_parameter("target_hand", "right")
+        self.declare_parameter("shadow_hand_model", "hand_lite_3finger")
+        self.declare_parameter("mirror_mode", "none")
 
         self.glove_topic = self.get_parameter("glove_topic").value
         self.print_period_sec = self.get_parameter("print_period_sec").value
@@ -65,14 +67,28 @@ class R1GloveListener(Node):
         self.calibration_resolver_mode = self.get_parameter(
             "calibration_resolver_mode"
         ).value
+        try:
+            self.teleop_config = resolve_hand_teleop_config(
+                input_source=self.get_parameter("input_source").value,
+                input_hand=self.get_parameter("input_hand").value,
+                target_hand=self.get_parameter("target_hand").value,
+                shadow_hand_model=self.get_parameter("shadow_hand_model").value,
+                mirror_mode=self.get_parameter("mirror_mode").value,
+            )
+        except ValueError as exc:
+            self.get_logger().error(f"Invalid hand teleop config: {exc}")
+            raise
+
         self.calibration = load_calibration(
             self.calibration_csv_path,
+            hand=self.teleop_config.input_hand,
             calibration_dir=self.calibration_dir,
             resolver_mode=self.calibration_resolver_mode,
         )
 
         self.latest_msg = None
         self.latest_frame = None
+        self.latest_pipeline_preview = None
         self.message_count = 0
         self.console = Console() if Console is not None and self.use_rich else None
         self.live = None
@@ -112,38 +128,36 @@ class R1GloveListener(Node):
                 self.get_logger().info(message)
             return
 
-        raw_flexion = self.latest_frame.raw_flexion_by_finger()
-        raw_abduction = self.latest_frame.raw_abduction_by_finger()
-        flexion_ranges = (
-            self.calibration.flexion_ranges
-            if self.calibration.has_complete_flexion()
-            else None
+        self.latest_pipeline_preview = build_dry_run_pipeline(
+            self.latest_frame,
+            self.calibration,
+            self.teleop_config,
+            duration_sec=2.0,
         )
-        calibrated_flexion = calibrate_flexion(raw_flexion, ranges=flexion_ranges)
-        abduction_status = abduction_diagnostics(raw_abduction, self.calibration)
+        save_packet(self.latest_pipeline_preview.packet, LATEST_PACKET_PATH)
 
-        target = map_r1_flexion_to_shadow_targets(calibrated_flexion)
-        trajectory_msg = build_shadow_joint_trajectory(target, duration_sec=2.0)
-        packet = trajectory_to_packet(trajectory_msg)
-        save_packet(packet, LATEST_PACKET_PATH)
+        filtered_state = self.latest_pipeline_preview.filtered_state
+        mapped_state = filtered_state.mapped_state
+        calibrated_state = mapped_state.calibrated_state
+        raw_state = calibrated_state.raw_state
 
         if self.compact_output:
             self.render_dashboard(
-                raw_flexion,
-                calibrated_flexion,
-                raw_abduction,
-                abduction_status,
-                target,
+                raw_state.raw_flexion,
+                calibrated_state.calibrated_flexion,
+                raw_state.raw_abduction,
+                calibrated_state.abduction_diagnostics,
+                filtered_state.target,
             )
         else:
             self.get_logger().info(
                 "\n".join(
                     self.dashboard_lines(
-                        raw_flexion,
-                        calibrated_flexion,
-                        raw_abduction,
-                        abduction_status,
-                        target,
+                        raw_state.raw_flexion,
+                        calibrated_state.calibrated_flexion,
+                        raw_state.raw_abduction,
+                        calibrated_state.abduction_diagnostics,
+                        filtered_state.target,
                     )
                 )
             )
@@ -327,11 +341,42 @@ class R1GloveListener(Node):
         return lines
 
     def status_lines(self):
-        return [
+        lines = [
             f"topic: {self.glove_topic}",
             f"messages_received: {self.message_count}",
+            f"teleop_config: {self.teleop_config.summary()}",
+            (
+                "shadow_model_active_digits: "
+                + ",".join(self.teleop_config.model.active_digits)
+            ),
             f"packet: {LATEST_PACKET_PATH}",
             "safety: dry-run only, not publishing to Shadow",
+        ]
+        lines.extend(self.pipeline_status_lines())
+        warnings = self.teleop_config.warnings()
+        if warnings:
+            lines.append("teleop_config_warnings: " + "; ".join(warnings))
+        return lines
+
+    def pipeline_status_lines(self):
+        if self.latest_pipeline_preview is None:
+            return [
+                "mapping_profile: hand_lite_3finger_placeholder",
+                "mapped_from: calibrated_flexion",
+                "abduction_used_for_shadow_mapping: false",
+                "filter_profile: pass_through",
+            ]
+
+        filtered_state = self.latest_pipeline_preview.filtered_state
+        mapped_state = filtered_state.mapped_state
+        return [
+            f"mapping_profile: {mapped_state.mapping_profile}",
+            f"mapped_from: {','.join(mapped_state.mapped_from)}",
+            (
+                "abduction_used_for_shadow_mapping: "
+                f"{str(mapped_state.abduction_used_for_shadow_mapping).lower()}"
+            ),
+            f"filter_profile: {filtered_state.filter_profile}",
         ]
 
     def calibration_lines(self):

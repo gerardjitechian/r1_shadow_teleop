@@ -1,21 +1,10 @@
 from dataclasses import dataclass
 from typing import Dict, List
 
+from r1_shadow_teleop.shadow_hand.config import HAND_LITE_3FINGER_JOINT_NAMES
 
-SHADOW_JOINT_NAMES = [
-    "rh_FFJ1",
-    "rh_FFJ2",
-    "rh_FFJ3",
-    "rh_FFJ4",
-    "rh_RFJ1",
-    "rh_RFJ2",
-    "rh_RFJ3",
-    "rh_RFJ4",
-    "rh_THJ1",
-    "rh_THJ2",
-    "rh_THJ4",
-    "rh_THJ5",
-]
+
+SHADOW_JOINT_NAMES = list(HAND_LITE_3FINGER_JOINT_NAMES)
 
 
 @dataclass

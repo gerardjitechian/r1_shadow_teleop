@@ -268,7 +268,7 @@ The R1 glove has 5 fingers, while the discovered Shadow Hand Lite configuration 
 The R1-side listener generates:
 
 ```text
-docs/latest_shadow_command_packet.json
+runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Example safety flags:
@@ -316,7 +316,7 @@ docs/safety_notes.md
 ### Important generated local files
 
 ```text
-docs/latest_shadow_command_packet.json
+runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Do not commit this generated packet.

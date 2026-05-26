@@ -5,6 +5,12 @@ from pathlib import Path
 from trajectory_msgs.msg import JointTrajectory
 
 
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_COMMAND_PACKET_PATH = (
+    PACKAGE_ROOT / "runtime_data" / "shadow_hand" / "latest_command_packet.json"
+)
+
+
 def trajectory_to_packet(msg: JointTrajectory, source: str = "r1_glove69_rh") -> dict:
     """
     Convert a JointTrajectory preview into a simple JSON-serializable packet.

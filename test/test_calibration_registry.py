@@ -1,16 +1,20 @@
 import csv
-import importlib
 import json
-import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-calibration_module = importlib.import_module('r1_shadow_teleop.r1_calibration')
+from r1_shadow_teleop.calibration.defaults import DEFAULT_CALIBRATION_DIR
+from r1_shadow_teleop.calibration.models import FINGERS
+from r1_shadow_teleop.calibration.resolver import load_calibration
+from r1_shadow_teleop.calibration.storage import (
+    calibration_registry_path,
+    update_calibration_registry,
+)
 
-FINGERS = calibration_module.FINGERS
-calibration_registry_path = calibration_module.calibration_registry_path
-load_calibration = calibration_module.load_calibration
-update_calibration_registry = calibration_module.update_calibration_registry
+
+def test_default_calibration_dir_is_project_runtime_data():
+    expected = Path(__file__).resolve().parents[1] / "runtime_data" / "senseglove_r1" / "calibrations"
+    assert DEFAULT_CALIBRATION_DIR == expected
+    assert calibration_registry_path().parent == expected
 
 
 def flexion_ranges(open_value, closed_value, fingers=None):

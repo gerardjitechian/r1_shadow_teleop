@@ -127,8 +127,8 @@ def main():
 
     parser.add_argument(
         "--packet",
-        default="docs/latest_shadow_command_packet.json",
-        help="Path to latest_shadow_command_packet.json",
+        default="runtime_data/shadow_hand/latest_command_packet.json",
+        help="Path to latest_command_packet.json",
     )
 
     parser.add_argument(

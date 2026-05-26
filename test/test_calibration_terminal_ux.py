@@ -26,7 +26,13 @@ fake_r1_msgs.msg.R1GloveState = object
 sys.modules.setdefault("r1_msgs", fake_r1_msgs)
 sys.modules.setdefault("r1_msgs.msg", fake_r1_msgs.msg)
 
-calibration_tool = importlib.import_module("r1_shadow_teleop.r1_calibration_tool")
+calibration_tool = importlib.import_module("r1_shadow_teleop.calibration.tool_node")
+terminal_ui_module = importlib.import_module("r1_shadow_teleop.calibration.terminal_ui")
+poses_module = importlib.import_module("r1_shadow_teleop.calibration.poses")
+calibration_tool.run_timed_progress = terminal_ui_module.run_timed_progress
+calibration_tool.flexion_poses = poses_module.flexion_poses
+calibration_tool.abduction_poses = poses_module.abduction_poses
+calibration_tool.pinch_validation_poses = poses_module.pinch_validation_poses
 
 
 class CaptureUI:

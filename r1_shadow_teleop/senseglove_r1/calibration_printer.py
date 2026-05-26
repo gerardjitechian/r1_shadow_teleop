@@ -8,7 +8,7 @@ from r1_msgs.msg import R1GloveState
 
 class R1CalibrationPrinter(Node):
     def __init__(self):
-        super().__init__("r1_calibration_printer")
+        super().__init__("senseglove_r1_calibration_printer")
 
         self.declare_parameter("glove_topic", "/r1/glove69/rh/glove_states")
         self.declare_parameter("print_period_sec", 0.5)

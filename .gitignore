@@ -29,5 +29,9 @@ bags/
 .vscode/
 .idea/
 
-# Generated dry-run Shadow command snapshot
-docs/latest_shadow_command_packet.json
+# Generated project-local runtime data
+runtime_data/senseglove_r1/calibrations/*
+!runtime_data/senseglove_r1/calibrations/.gitkeep
+runtime_data/shadow_hand/*
+!runtime_data/shadow_hand/.gitkeep
+

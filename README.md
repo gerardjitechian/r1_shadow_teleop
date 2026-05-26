@@ -140,24 +140,22 @@ rh_THJ* → Shadow thumb
 
 ## What Works Today
 
-The R1-side dry-run pipeline works:
+The R1-side dry-run pipeline works through explicit internal stages:
 
 ```text
 R1 glove topic
         ↓
-r1_glove_listener
+RawHandState from normalized_finger_positions
         ↓
-normalized_finger_positions parsing
+CalibratedHandState with flexion plus display-only abduction diagnostics
         ↓
-calibrated flexion values
+MappedShadowTargetState, calibrated flexion only
         ↓
-R1 thumb/index/ring → Shadow thumb/first/ring
+FilteredShadowTargetState, pass-through for now
         ↓
-ShadowTarget with 12 ordered joint values
+OutgoingCommandPreview with JointTrajectory and dry-run packet
         ↓
-JointTrajectory preview
-        ↓
-latest_shadow_command_packet.json
+latest_command_packet.json
 ```
 
 Validated items:
@@ -174,6 +172,7 @@ Validated items:
   4. ring
   5. pinky
 - The values are in the range `0..10000`, so the first parser scales them to `0.0..1.0`.
+- Abduction is reported for diagnostics only and is not used for Shadow mapping yet.
 - A pose calibration CSV was collected for the right glove.
 - A calibrated dry-run mapping is implemented.
 - A Shadow `JointTrajectory` preview is generated.
@@ -333,24 +332,17 @@ r1_shadow_teleop/
 ├── README.md
 ├── package.xml
 ├── setup.py
+├── runtime_data/
+│   ├── senseglove_r1/
+│   │   └── calibrations/    # generated CSV/JSON/registry files, gitignored
+│   └── shadow_hand/         # generated dry-run command packet, gitignored
 ├── r1_shadow_teleop/
-│   ├── r1_glove_listener.py
-│   ├── r1_calibration.py
-│   ├── r1_calibration_printer.py
-│   ├── r1_calibration_tool.py
-│   ├── shadow_mapping.py
-│   ├── shadow_trajectory.py
-│   └── shadow_command_packet.py
+│   ├── senseglove_r1/       # R1 frame parsing and raw calibration printer
+│   ├── calibration/         # capture, poses, registry, resolver, diagnostics
+│   ├── dashboard/           # listener/display node
+│   └── shadow_hand/         # dry-run Shadow Hand preview packet helpers
 ├── tools/
-│   ├── shadow_print_receiver.py
-│   ├── shadow_ros1_sender.py
-│   └── make_shadow_print_bundle.sh
 └── docs/
-    ├── calibration_plan.md
-    ├── r1_mapping_notes.md
-    ├── calibrations/
-    ├── shadow_ros1_sender_safety.md
-    └── shadow_hand_discovery/
 ```
 
 This documentation set should be placed in:
@@ -365,47 +357,25 @@ with `README.md` at the repository root and the other Markdown files under `docs
 
 ## Important Code Modules
 
-### `r1_glove_listener.py`
+### `senseglove_r1/`
 
-Main R1-side dry-run node.
+SenseGlove R1-specific code. `frame.py` parses the ROS 2 glove message into a hand frame, and `calibration_printer.py` prints raw normalized glove values for inspection.
 
-Responsibilities:
+### `calibration/`
 
-- Subscribe to `/r1/glove69/rh/glove_states`.
-- Parse `normalized_finger_positions`.
-- Apply calibration.
-- Map R1 thumb/index/ring to Shadow thumb/first/ring.
-- Build a Shadow `JointTrajectory` preview.
-- Save `docs/latest_shadow_command_packet.json`.
-- Print human-readable preview.
+Calibration lifecycle code: data models, default paths, pose definitions, terminal UI helpers, capture/range computation, JSON sidecar and registry storage, active resolver selection, and abduction diagnostics.
 
-### `r1_calibration.py`
+### `dashboard/listener_node.py`
 
-Stores current right-glove open/closed calibration constants and provides calibrated flexion.
+Main R1-side dry-run listener. It subscribes to `/r1/glove69/rh/glove_states`, applies active calibration, shows calibration-source and abduction diagnostics, builds a dry-run Shadow Hand preview, and saves `runtime_data/shadow_hand/latest_command_packet.json`.
 
-### `shadow_mapping.py`
+### `shadow_hand/`
 
-Converts calibrated R1 finger values into the 12 Shadow Hand Lite joint target values.
+Dry-run Shadow Hand preview helpers. These modules map calibrated R1 flexion to preview targets, build a `JointTrajectory` message shape, and serialize the current preview packet. They do not publish to the robot.
 
-### `shadow_trajectory.py`
+### `tools/`
 
-Builds a `JointTrajectory` message shape from the mapped Shadow target.
-
-### `shadow_command_packet.py`
-
-Converts the trajectory preview into a JSON-serializable dry-run packet.
-
-### `tools/shadow_print_receiver.py`
-
-Reads the JSON packet and prints a human-readable Shadow-side preview. Does not publish.
-
-### `tools/shadow_ros1_sender.py`
-
-ROS 1 sender skeleton. In default mode it prints only. It contains safety gates that currently prevent publishing.
-
-### `tools/make_shadow_print_bundle.sh`
-
-Creates a portable `.tar.gz` bundle containing the Shadow-side print-only test tools and a current JSON packet.
+Print-only and safety-gated Shadow-side helper scripts for moving preview packets between machines. Live publishing remains out of scope.
 
 ---
 
@@ -430,7 +400,7 @@ Expected:
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_glove_listener
+ros2 run r1_shadow_teleop senseglove_r1_listener
 ```
 
 Expected output includes:
@@ -447,7 +417,7 @@ Shadow JointTrajectory preview, NOT publishing:
 It should also write:
 
 ```text
-~/r1_ws/src/r1_shadow_teleop/docs/latest_shadow_command_packet.json
+~/r1_ws/src/r1_shadow_teleop/runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 ### Run calibration printer
@@ -455,7 +425,7 @@ It should also write:
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_calibration_printer
+ros2 run r1_shadow_teleop senseglove_r1_calibration_printer
 ```
 
 ### Run calibration utility
@@ -465,7 +435,7 @@ Interactive guided calibration:
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_calibration
+ros2 run r1_shadow_teleop senseglove_r1_calibration
 ```
 
 The utility prompts for hand, mode, selected fingers, and output location. For each pose it shows a separated step panel with explicit, comfort-focused instructions, waits for Enter, shows settle/sample progress based on `settle_seconds` and `sample_seconds`, shows a compact summary, then asks:
@@ -480,36 +450,50 @@ q       = abort safely
 Each complete run writes timestamped CSV/JSON files under the package-local calibration directory and updates stable latest files there:
 
 ```text
-r1_shadow_teleop/calibrations/r1_right_glove_calibration_2026-05-26_143012.csv
-r1_shadow_teleop/calibrations/r1_right_glove_calibration_latest.csv
+runtime_data/senseglove_r1/calibrations/r1_right_glove_calibration_2026-05-26_143012.csv
+runtime_data/senseglove_r1/calibrations/r1_right_glove_calibration_latest.csv
 ```
 
-Existing calibration files under `docs/calibrations/` are still read as a legacy fallback when no runtime records exist, but new calibration runs now write to `r1_shadow_teleop/calibrations/` by default. Each saved run also updates the package-local registry:
+New calibration runs write to `runtime_data/senseglove_r1/calibrations/` by default. Generated CSV/JSON/registry files are ignored by Git, and each saved run updates the package-local registry:
 
 ```text
-r1_shadow_teleop/calibrations/calibration_registry.json
+runtime_data/senseglove_r1/calibrations/calibration_registry.json
 ```
 
 Longer timing example:
 
 ```bash
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p settle_seconds:=1.5 -p sample_seconds:=4.0
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p settle_seconds:=1.5 -p sample_seconds:=4.0
 ```
 
 Useful non-interactive setup examples:
 
 ```bash
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=abduction -p fingers:=all -p hand:=right -p non_interactive:=true
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=flexion -p fingers:=index -p hand:=right -p non_interactive:=true
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=both -p fingers:=all -p hand:=right -p non_interactive:=true
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=pinch_validation -p fingers:=index,middle,ring,pinky -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=abduction -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=flexion -p fingers:=index -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=both -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=pinch_validation -p fingers:=index,middle,ring,pinky -p hand:=right -p non_interactive:=true
 ```
 
 Run the listener with the default active calibration. The default resolver is `composed_latest`, which chooses the newest valid record per hand, dimension, and finger so a flexion-only run does not erase previous abduction calibration:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener
+ros2 run r1_shadow_teleop senseglove_r1_listener
 ```
+
+The listener also reports the active dry-run teleop config. Phase 6 supports SenseGlove R1 input only, with these defaults:
+
+```text
+input_source=senseglove_r1
+input_hand=right
+target_hand=right
+shadow_hand_model=hand_lite_3finger
+mirror_mode=none
+```
+
+`shadow_hand_model:=hand_full_5finger` is accepted as known future metadata, but the current preview mapping is still the existing Hand Lite-style thumb/first/ring dry-run mapping. Unsupported input sources or mirror modes fail clearly instead of silently changing behavior.
+
+Phase 7 makes the dry-run pipeline explicit in the listener: raw hand state, calibrated hand state, mapped Shadow target state, pass-through filtered state, and outgoing command preview. The listener reports `mapping_profile: hand_lite_3finger_placeholder`, `mapped_from: calibrated_flexion`, `abduction_used_for_shadow_mapping: false`, and `filter_profile: pass_through`.
 
 Resolver modes:
 
@@ -522,26 +506,26 @@ explicit_file    only the file passed with calibration_csv_path
 Example:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_resolver_mode:=latest_complete
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p calibration_resolver_mode:=latest_complete
 ```
 
 Run the listener with an explicit calibration file. Explicit paths still override the registry resolver and use only that CSV plus its sidecar:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_csv_path:=r1_shadow_teleop/calibrations/r1_right_glove_calibration_YYYY-MM-DD_HHMMSS.csv
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p calibration_csv_path:=runtime_data/senseglove_r1/calibrations/r1_right_glove_calibration_YYYY-MM-DD_HHMMSS.csv
 ```
 
 Run the listener in plain/no-color mode:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p use_rich:=false -p color_output:=false
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p use_rich:=false -p color_output:=false
 ```
 
 Abduction note: raw/sdk abduction is directional SDK data. The listener also shows the calibration neutral baseline, signed offset from neutral, spread, and an abduction status. Spread is shown only when schema v2 calibration metadata is reliable; missing quality metadata or warnings mean recalibration is recommended.
 
 ### Create Shadow print-only transfer bundle
 
-Make sure `r1_glove_listener` has generated a current packet first.
+Make sure `senseglove_r1_listener` has generated a current packet first.
 
 ```bash
 cd ~/r1_ws/src/r1_shadow_teleop
@@ -568,7 +552,7 @@ tar -xzf ~/shadow_print_only_bundle_*.tar.gz -C ~/shadow_print_only_test
 
 cd ~/shadow_print_only_test/r1_shadow_teleop
 
-python3 tools/shadow_ros1_sender.py   --packet docs/latest_shadow_command_packet.json
+python3 tools/shadow_ros1_sender.py   --packet runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Expected ending:
@@ -580,7 +564,7 @@ Not publishing because --publish was not provided.
 Safety refusal test:
 
 ```bash
-python3 tools/shadow_ros1_sender.py   --packet docs/latest_shadow_command_packet.json   --publish   --i-understand-this-can-move-the-robot
+python3 tools/shadow_ros1_sender.py   --packet runtime_data/shadow_hand/latest_command_packet.json   --publish   --i-understand-this-can-move-the-robot
 ```
 
 Expected ending:
@@ -605,7 +589,7 @@ Inside the container:
 ```bash
 cd /tmp/r1_shadow_teleop_print_test
 
-python3 tools/shadow_ros1_sender.py   --packet docs/latest_shadow_command_packet.json
+python3 tools/shadow_ros1_sender.py   --packet runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Expected ending:
@@ -653,10 +637,10 @@ Notes:
 These are generated runtime artifacts and generally should not be committed:
 
 ```text
-docs/latest_shadow_command_packet.json
+runtime_data/shadow_hand/latest_command_packet.json
 ```
 
-Runtime calibration CSV/JSON files now live under `r1_shadow_teleop/calibrations/` and are generated files and should only be committed intentionally. Older calibration files under `~/.ros/r1_shadow_teleop/calibrations/` or `docs/calibrations/` remain fallback-readable.
+Runtime calibration CSV/JSON/registry files live under `runtime_data/senseglove_r1/calibrations/`. The generated files are ignored by Git; only the directory placeholder is kept in the repository.
 
 The Shadow print-only bundle should not be committed:
 
@@ -710,25 +694,18 @@ The current code does not know final verified joint limits from the Shadow URDF/
 
 ## Next Steps
 
-Immediate next steps for the next lab session:
+The current application remains **dry-run only**. Do not treat UDP/TCP transport,
+ROS bridge work, or live Shadow publishing as the immediate next task.
 
-1. Transfer the Shadow print-only bundle from USB to the Shadow laptop.
-2. Run the print-only Shadow-side test outside Docker.
-3. Copy the test folder into `dexterous_hand_real_hw`.
-4. Run the print-only test inside Docker.
-5. Confirm the script refuses to publish even with `--publish` because packet safety flags are dry-run.
-6. Implement live UDP transport:
-   - R1 side sends packets at approximately 10 Hz initially.
-   - Shadow side receives packets and prints previews.
-   - Still no publishing.
-7. Add Shadow-side safety checks:
-   - stale packet timeout
-   - deadman input
-   - command clamps
-   - rate limiting
-8. Only after those steps, test a known safe open-hand command in ROS 1.
-9. Only after open-hand command validation, test tiny real motion.
-10. Only after tiny motion validation, connect live glove control.
+Recommended order:
+
+1. Expand the Shadow Hand model/config layer using real Shadow-side evidence for the current `hand_lite_3finger` setup.
+2. Collect and document controller topics, active joints, joint order, joint limits, `/joint_states`, and safe neutral/open postures from the Shadow ROS 1/Docker environment.
+3. Replace placeholder mapping with model-driven dry-run mapping and validation.
+4. Add dry-run safety checks for stale packets, wrong joint order, out-of-range values, sudden jumps, and unsafe defaults.
+5. Only after dry-run validation and safety design should transport/bridge work or guarded live publishing to `/rh_trajectory_controller/command` be considered.
+
+The canonical active roadmap is `docs/current_roadmap.md`. The completed Phase 1-7 refactor plan is archived at `docs/archive/refactor_plan_phases_1_7.md`.
 
 ---
 

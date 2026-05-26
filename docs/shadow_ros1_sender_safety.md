@@ -1,6 +1,7 @@
 # Shadow ROS1 Sender Safety Notes
 
 Current status:
+- The R1 listener writes the generated packet to `runtime_data/shadow_hand/latest_command_packet.json`.
 - `tools/shadow_ros1_sender.py` can read a generated Shadow command packet.
 - It validates the expected right Shadow Hand Lite joint order.
 - It prints the `JointTrajectory` command that would be sent.
@@ -26,3 +27,8 @@ Before any real Shadow Hand command:
 - Use slow trajectories.
 - Clamp all joint values.
 - Start with a known safe open-hand command.
+
+
+Roadmap note:
+- Guarded live publishing is future work tracked in `docs/current_roadmap.md`.
+- The current sender behavior should remain print/refusal focused until that phase is explicitly implemented and documented.

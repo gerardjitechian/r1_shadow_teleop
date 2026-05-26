@@ -147,7 +147,7 @@ Terminal 2:
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_glove_listener
+ros2 run r1_shadow_teleop senseglove_r1_listener
 ```
 
 Expected output is a dry-run dashboard with calibration reporting and an R1 finger table. The calibration section should include the active resolver, source files or registry components, status, and any recalibration warnings. The table includes raw flexion, calibrated flexion, raw/sdk abduction, neutral baseline, signed abduction offset, reliable spread when available, and abduction status.
@@ -155,7 +155,7 @@ Expected output is a dry-run dashboard with calibration reporting and an R1 fing
 This node writes:
 
 ```text
-~/r1_ws/src/r1_shadow_teleop/docs/latest_shadow_command_packet.json
+~/r1_ws/src/r1_shadow_teleop/runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 This is a generated file and should not be committed.
@@ -171,7 +171,7 @@ Terminal 2:
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_calibration_printer
+ros2 run r1_shadow_teleop senseglove_r1_calibration_printer
 ```
 
 Expected output format:
@@ -193,7 +193,7 @@ Terminal 2:
 ```bash
 cd ~/r1_ws
 source ~/r1_ws/activate_r1.sh
-ros2 run r1_shadow_teleop r1_calibration
+ros2 run r1_shadow_teleop senseglove_r1_calibration
 ```
 
 For each pose, the utility shows a separated step panel with explicit, comfort-focused instructions, waits for Enter, shows settle/sample progress based on `settle_seconds` and `sample_seconds`, then asks what to do next:
@@ -208,14 +208,14 @@ q       = abort safely
 Complete calibrations write timestamped CSV/JSON files and update latest copies in the package-local calibration directory:
 
 ```text
-r1_shadow_teleop/calibrations/r1_right_glove_calibration_<timestamp>.csv
-r1_shadow_teleop/calibrations/r1_right_glove_calibration_latest.csv
+runtime_data/senseglove_r1/calibrations/r1_right_glove_calibration_<timestamp>.csv
+runtime_data/senseglove_r1/calibrations/r1_right_glove_calibration_latest.csv
 ```
 
-Existing files under `docs/calibrations/` remain readable as a legacy fallback when no runtime records exist, but new calibration runs now write to `r1_shadow_teleop/calibrations/` by default. Each saved run also updates the package-local registry:
+New calibration runs write to `runtime_data/senseglove_r1/calibrations/` by default. Generated CSV/JSON/registry files are ignored by Git, and each saved run updates the package-local registry:
 
 ```text
-r1_shadow_teleop/calibrations/calibration_registry.json
+runtime_data/senseglove_r1/calibrations/calibration_registry.json
 ```
 
 Incomplete or aborted runs are saved with incomplete metadata when useful, but latest is not updated.
@@ -223,23 +223,25 @@ Incomplete or aborted runs are saved with incomplete metadata when useful, but l
 Longer timing example:
 
 ```bash
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p settle_seconds:=1.5 -p sample_seconds:=4.0
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p settle_seconds:=1.5 -p sample_seconds:=4.0
 ```
 
 Non-interactive setup examples:
 
 ```bash
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=abduction -p fingers:=all -p hand:=right -p non_interactive:=true
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=flexion -p fingers:=index -p hand:=right -p non_interactive:=true
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=both -p fingers:=all -p hand:=right -p non_interactive:=true
-ros2 run r1_shadow_teleop r1_calibration --ros-args -p calibration_mode:=pinch_validation -p fingers:=index,middle,ring,pinky -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=abduction -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=flexion -p fingers:=index -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=both -p fingers:=all -p hand:=right -p non_interactive:=true
+ros2 run r1_shadow_teleop senseglove_r1_calibration --ros-args -p calibration_mode:=pinch_validation -p fingers:=index,middle,ring,pinky -p hand:=right -p non_interactive:=true
 ```
 
 Run the listener with the default active calibration. The default resolver is `composed_latest`, which chooses the newest valid record per hand, dimension, and finger so a flexion-only run does not erase previous abduction calibration:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener
+ros2 run r1_shadow_teleop senseglove_r1_listener
 ```
+
+The listener reports the active dry-run teleop config. Phase 6 supports these defaults: `input_source:=senseglove_r1`, `input_hand:=right`, `target_hand:=right`, `shadow_hand_model:=hand_lite_3finger`, and `mirror_mode:=none`. `hand_full_5finger` is recognized as future metadata only; the current preview mapping remains the existing Hand Lite-style dry-run mapping. The listener should also report `mapping_profile: hand_lite_3finger_placeholder`, `mapped_from: calibrated_flexion`, `abduction_used_for_shadow_mapping: false`, and `filter_profile: pass_through`.
 
 Resolver modes:
 
@@ -252,31 +254,49 @@ explicit_file    only the file passed with calibration_csv_path
 Example:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_resolver_mode:=latest_complete
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p calibration_resolver_mode:=latest_complete
 ```
 
 Run the listener with a specific calibration file. Explicit paths still override the registry resolver and use only that CSV plus its sidecar:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p calibration_csv_path:=r1_shadow_teleop/calibrations/r1_right_glove_calibration_YYYY-MM-DD_HHMMSS.csv
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p calibration_csv_path:=runtime_data/senseglove_r1/calibrations/r1_right_glove_calibration_YYYY-MM-DD_HHMMSS.csv
 ```
 
 Run the listener in plain/no-color mode:
 
 ```bash
-ros2 run r1_shadow_teleop r1_glove_listener --ros-args -p use_rich:=false -p color_output:=false
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p use_rich:=false -p color_output:=false
 ```
 
 Abduction note: raw/sdk abduction is directional SDK data. The listener also shows the calibration neutral baseline, signed offset from neutral, spread, and an abduction status. Spread is shown only when schema v2 calibration metadata is reliable; missing quality metadata or warnings mean recalibration is recommended.
+
+Return checklist:
+
+```bash
+ros2 run r1_shadow_teleop senseglove_r1_listener --ros-args -p show_shadow_targets:=true
+```
+
+Confirm the listener shows:
+
+```text
+mapping_profile: hand_lite_3finger_placeholder
+mapped_from: calibrated_flexion
+abduction_used_for_shadow_mapping: false
+filter_profile: pass_through
+safety: dry-run only, not publishing to Shadow
+```
+
+The dry-run packet should be written to `runtime_data/shadow_hand/latest_command_packet.json`. Do not treat this as live publishing.
 
 ---
 
 ## Generate a Shadow Print-Only Bundle
 
-Make sure `r1_glove_listener` has already generated:
+Make sure `senseglove_r1_listener` has already generated:
 
 ```text
-docs/latest_shadow_command_packet.json
+runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Then run:
@@ -310,7 +330,7 @@ From the R1 repo, after the listener has generated a packet:
 ```bash
 cd ~/r1_ws/src/r1_shadow_teleop
 
-python3 tools/shadow_ros1_sender.py   --packet docs/latest_shadow_command_packet.json
+python3 tools/shadow_ros1_sender.py   --packet runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Expected:
@@ -322,7 +342,7 @@ Not publishing because --publish was not provided.
 Safety refusal test:
 
 ```bash
-python3 tools/shadow_ros1_sender.py   --packet docs/latest_shadow_command_packet.json   --publish   --i-understand-this-can-move-the-robot
+python3 tools/shadow_ros1_sender.py   --packet runtime_data/shadow_hand/latest_command_packet.json   --publish   --i-understand-this-can-move-the-robot
 ```
 
 Expected:
@@ -356,7 +376,7 @@ git push
 Do not commit generated runtime packet:
 
 ```text
-docs/latest_shadow_command_packet.json
+runtime_data/shadow_hand/latest_command_packet.json
 ```
 
 Commit documentation:
@@ -401,12 +421,13 @@ normalized_finger_positions
 
 That is expected. Use calibration. Open hand is not necessarily zero. Current code uses open/closed baselines.
 
-### `docs/latest_shadow_command_packet.json` appears in Git status
+### `runtime_data/shadow_hand/latest_command_packet.json` appears in Git status
 
 It should be ignored. Confirm `.gitignore` contains:
 
 ```text
-docs/latest_shadow_command_packet.json
+runtime_data/shadow_hand/*
+!runtime_data/shadow_hand/.gitkeep
 ```
 
 ### Two-glove mode does not publish topics

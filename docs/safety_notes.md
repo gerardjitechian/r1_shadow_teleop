@@ -28,6 +28,11 @@ Current code can:
 
 Current code should not move the physical Shadow Hand.
 
+
+Roadmap reference: `docs/current_roadmap.md` is the canonical active plan for
+when transport, filtering, guarded publishing, and closed-loop safety work should
+be introduced. Those items are future work, not current live behavior.
+
 ---
 
 ## Current Software Gates

@@ -19,9 +19,9 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
-            "r1_glove_listener = r1_shadow_teleop.r1_glove_listener:main",
-            "r1_calibration = r1_shadow_teleop.r1_calibration_tool:main",
-            "r1_calibration_printer = r1_shadow_teleop.r1_calibration_printer:main",
+            "senseglove_r1_listener = r1_shadow_teleop.dashboard.listener_node:main",
+            "senseglove_r1_calibration = r1_shadow_teleop.calibration.tool_node:main",
+            "senseglove_r1_calibration_printer = r1_shadow_teleop.senseglove_r1.calibration_printer:main",
         ],
     },
 )

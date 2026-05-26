@@ -28,3 +28,13 @@ Important:
 - This is a dry-run mapping only.
 - It prints proposed Shadow targets but does not publish commands to the robot.
 - Scaling, calibration, inversion, offsets, and joint limits still need to be validated before commanding hardware.
+
+Roadmap status:
+- Phase 6 adds dry-run config metadata for `input_source`, `input_hand`, `target_hand`, `shadow_hand_model`, and `mirror_mode`.
+- The only supported input source is still `senseglove_r1`; future input adapters should plug in before mapping rather than inside Shadow Hand target config.
+- The current mapping remains a placeholder-grade dry-run preview for the `hand_lite_3finger`-style thumb/first/ring setup.
+- Future mapping should become model/config-driven rather than hardcoded.
+- Mapping profiles should account for `hand_lite_3finger`, `hand_full_5finger`, target hand side, possible mirror mode, validated joint order, and verified joint limits.
+- Do not use this mapping for live Shadow publishing until those validation steps exist.
+
+The active roadmap for replacing this placeholder mapping is `docs/current_roadmap.md`.

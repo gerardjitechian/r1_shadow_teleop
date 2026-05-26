@@ -1,5 +1,7 @@
 # Project Roadmap
 
+> Historical note: this archived roadmap may use old phase numbering and older bridge timing. The current active roadmap is `../refactor_plan.md`.
+
 ## Table of Contents
 
 - [North Star Goal](#north-star-goal)
